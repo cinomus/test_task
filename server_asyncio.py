@@ -1,43 +1,86 @@
 import asyncio
 import json
-from asyncio import StreamReader
+from asyncio import StreamReader, StreamWriter
 import re
 
 from game import GameOfLife
 
 
 async def init_board_handler():
+    '''
+    Обрабатывает запрос на получение пустого поля
+    Args: None
+    Returns: json
+    '''
     return json.dumps({'field': await GameOfLife.init_board()})
 
 
-async def start_game_handler(body):
+async def start_game_handler(body: bytes):
+    '''
+    Обрабатывает запрос на начало игры
+    Args: 
+        body: bytes - пришедщее тело запроса
+    Returns: json
+    '''
     request_data = json.loads(body)
     game_id = await GameOfLife.start_game(request_data['field'])
     return json.dumps({'game_id': game_id})
 
 
-async def get_game_handler(game_id):
+async def get_game_handler(game_id: int):
+    '''
+    Обрабатывает запрос на получение игры по id
+    Args: 
+        game_id: int - id игры
+    Returns: json
+    '''
     game_id, status = await GameOfLife.get_game(game_id)
     return json.dumps({'game_id': game_id, 'status': status})
 
 
-async def get_game_step_handler(game_id, step_number):
+async def get_game_step_handler(game_id: int, step_number: int):
+    '''
+    Обрабатывает запрос на получение шага игры
+    Args: 
+        game_id: int - id игры
+        step_number: int - номер шага
+    Returns: json
+    '''
     field = await GameOfLife.get_game_step(game_id, step_number)
     return json.dumps({'game_id': game_id, 'step_number': step_number, 'field': field})
 
 
-async def next_step_handler(game_id):
+async def next_step_handler(game_id: int):
+    '''
+    Обрабатывает запрос на получение следующего шага игры
+    Args: 
+        game_id: int - id игры
+    Returns: json
+    '''
     game_id, step_number, field = await GameOfLife.next_step(game_id)
     return json.dumps({'game_id': game_id, 'step_number': step_number, 'field': field})
 
 
-async def send_response(writer, response):
+async def send_response(writer: StreamWriter, response: str):
+    '''
+    Функция отправки ответа
+    Args: 
+        writer: StreamWriter
+        response: str
+    Returns: json
+    '''
     writer.write(response.encode())
     await writer.drain()
     writer.close()
 
 
-async def handle_request(reader: StreamReader, writer):
+async def handle_request(reader: StreamReader, writer: StreamWriter):
+    '''
+    Функция получения request
+    Args: 
+        reader: StreamReader
+        writer: StreamWriter
+    '''
     response = None
     try:
         raw_request = bytearray()
@@ -64,19 +107,19 @@ async def handle_request(reader: StreamReader, writer):
             response = headers + response_data + '\n'
 
         elif re.search(r'/games/(?P<game_id>\d+)/steps', path) and method == 'POST':  # Создание следующего шага
-            game_id = re.search(r'/games/(?P<game_id>\d+)/steps', path).group('game_id')
+            game_id = int(re.search(r'/games/(?P<game_id>\d+)/steps', path).group('game_id'))
             response_data = await next_step_handler(game_id)
             response = headers + response_data + '\n'
 
         elif re.search(r'/games/(?P<game_id>\d+)/steps/(?P<step_number>\d+)', path) and method == 'GET':
             match = re.search(r'/games/(?P<game_id>\d+)/steps/(?P<step_number>\d+)', path)
-            game_id = match.group('game_id')
-            step_number = match.group('step_number')
+            game_id = int(match.group('game_id'))
+            step_number = int(match.group('step_number'))
             response_data = await get_game_step_handler(game_id, step_number)
             response = headers + response_data + '\n'
 
         elif re.search(r'/games/(?P<game_id>\d+)', path) and method == 'GET':
-            game_id = re.search(r'/games/(?P<game_id>\d+)', path).group('game_id')
+            game_id = int(re.search(r'/games/(?P<game_id>\d+)', path).group('game_id'))
             response_data = await get_game_handler(game_id)
             response = headers + response_data + '\n'
 
